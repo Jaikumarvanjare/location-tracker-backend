@@ -2,8 +2,11 @@ import Fastify, { FastifyInstance } from 'fastify';
 import fastifyPostgres from '@fastify/postgres';
 import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUi from '@fastify/swagger-ui';
-import { sessionRoutes } from './routes/sessions';
-import { locationRoutes } from './routes/locations';
+import { sessionRoutes } from './modules/sessions/routes';
+import { locationRoutes } from './modules/locations/routes';
+import { validationError, internalError } from './utils/error';
+import { env } from './config/env';
+import { AppError } from './utils/AppError';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -17,7 +20,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   // ───────── DATABASE ─────────
   await app.register(fastifyPostgres, {
-    connectionString: process.env.DATABASE_URL,
+    connectionString: env.DATABASE_URL,
   });
 
   // ───────── REGISTER SCHEMAS ─────────
@@ -105,23 +108,25 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   // ───────── ERROR HANDLER ─────────
   app.setErrorHandler((error, _req, reply) => {
-    // Handle AJV validation errors
-    if (error.validation) {
-      return reply.status(400).send({
+
+    if (error instanceof AppError) {
+      return reply.status(error.statusCode).send({
         error: {
-          code: 'VALIDATION_ERROR',
+          code: error.name,
           message: error.message,
-        },
+        }
       });
     }
 
-    // Handle other errors
-    reply.status(500).send({
-      error: {
-        code: 'INTERNAL_ERROR',
-        message: error.message || 'Something went wrong',
-      },
-    });
+    if ((error as any).validation) {
+      return reply.status(400).send(
+        validationError(error.message)
+      );
+    }
+
+    return reply.status(500).send(
+      internalError(error.message)
+    );
   });
 
   // ───────── HEALTH CHECK ─────────
