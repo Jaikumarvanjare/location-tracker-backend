@@ -5,9 +5,10 @@ CREATE TABLE IF NOT EXISTS sessions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     device_id TEXT NOT NULL,
     status TEXT DEFAULT 'active',
-    started_at TIMESTAMP DEFAULT NOW(),
-    ended_at TIMESTAMP NULL,
-    created_at TIMESTAMP DEFAULT NOW()
+
+    started_at TIMESTAMPTZ DEFAULT NOW(),   
+    ended_at TIMESTAMPTZ NULL,              
+    created_at TIMESTAMPTZ DEFAULT NOW()    
 );
 
 -- Locations table
@@ -23,8 +24,8 @@ CREATE TABLE IF NOT EXISTS locations (
     speed DOUBLE PRECISION,
     heading DOUBLE PRECISION,
 
-    recorded_at TIMESTAMP NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW(),
+    recorded_at TIMESTAMPTZ NOT NULL,       
+    created_at TIMESTAMPTZ DEFAULT NOW(),   
 
     UNIQUE(session_id, recorded_at)
 );

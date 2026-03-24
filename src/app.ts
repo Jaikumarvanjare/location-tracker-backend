@@ -10,45 +10,47 @@ export async function buildApp(): Promise<FastifyInstance> {
     logger: true,
     ajv: {
       customOptions: {
-        strict: false, // ✅ allows "example"
+        strict: false, // allows "example" in schemas
       },
     },
   });
 
-  // ───────── DB ─────────
+  // ───────── DATABASE ─────────
   await app.register(fastifyPostgres, {
     connectionString: process.env.DATABASE_URL,
   });
 
-  // ───────── REGISTER SCHEMAS (IMPORTANT) ─────────
+  // ───────── REGISTER SCHEMAS ─────────
   app.addSchema({
     $id: 'Session',
     type: 'object',
     properties: {
-      id: { type: 'string' },
+      id: { type: 'string', format: 'uuid' },
       device_id: { type: 'string' },
       status: { type: 'string', enum: ['active', 'ended'] },
-      started_at: { type: 'string' },
-      ended_at: { type: ['string', 'null'] },
-      created_at: { type: 'string' },
+      started_at: { type: ['string', 'null'], format: 'date-time' },
+      ended_at: { type: ['string', 'null'], format: 'date-time' },
+      created_at: { type: 'string', format: 'date-time' },
     },
+    additionalProperties: false,
   });
 
   app.addSchema({
     $id: 'LocationPoint',
     type: 'object',
     properties: {
-      id: { type: 'string' },
-      session_id: { type: 'string' },
-      latitude: { type: 'number' },
-      longitude: { type: 'number' },
-      accuracy: { type: 'number' },
+      id: { type: 'string', format: 'uuid' },
+      session_id: { type: 'string', format: 'uuid' },
+      latitude: { type: 'number', minimum: -90, maximum: 90 },
+      longitude: { type: 'number', minimum: -180, maximum: 180 },
+      accuracy: { type: 'number', minimum: 0 },
       altitude: { type: ['number', 'null'] },
       speed: { type: ['number', 'null'] },
-      heading: { type: ['number', 'null'] },
-      recorded_at: { type: 'string' },
-      created_at: { type: 'string' },
+      heading: { type: ['number', 'null'], minimum: 0, maximum: 360 },
+      recorded_at: { type: 'string', format: 'date-time' },
+      created_at: { type: 'string', format: 'date-time' },
     },
+    additionalProperties: false,
   });
 
   app.addSchema({
@@ -59,6 +61,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       limit: { type: 'number' },
       offset: { type: 'number' },
     },
+    additionalProperties: false,
   });
 
   app.addSchema({
@@ -71,8 +74,12 @@ export async function buildApp(): Promise<FastifyInstance> {
           code: { type: 'string' },
           message: { type: 'string' },
         },
+        required: ['code', 'message'],
+        additionalProperties: false,
       },
     },
+    required: ['error'],
+    additionalProperties: false,
   });
 
   // ───────── SWAGGER ─────────
@@ -87,6 +94,9 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(fastifySwaggerUi, {
     routePrefix: '/docs',
+    uiConfig: {
+      deepLinking: true,
+    },
   });
 
   // ───────── ROUTES ─────────
@@ -95,7 +105,8 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   // ───────── ERROR HANDLER ─────────
   app.setErrorHandler((error, _req, reply) => {
-    if ((error as any).validation) {
+    // Handle AJV validation errors
+    if (error.validation) {
       return reply.status(400).send({
         error: {
           code: 'VALIDATION_ERROR',
@@ -104,15 +115,16 @@ export async function buildApp(): Promise<FastifyInstance> {
       });
     }
 
-    return reply.status(500).send({
+    // Handle other errors
+    reply.status(500).send({
       error: {
         code: 'INTERNAL_ERROR',
-        message: 'Something went wrong',
+        message: error.message || 'Something went wrong',
       },
     });
   });
 
-  // ───────── HEALTH ─────────
+  // ───────── HEALTH CHECK ─────────
   app.get('/health', async () => ({ status: 'ok' }));
 
   return app;

@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { buildApp } from './app';
 
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 async function start() {
   const app = await buildApp();
